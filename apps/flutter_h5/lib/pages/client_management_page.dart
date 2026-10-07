@@ -20,6 +20,7 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
 
   late final WebViewController _controller;
   late final Uri _clientUrl;
+  late final double _safeAreaTop;
   bool _initializationStarted = false;
   int _progress = 0;
   bool _hasError = false;
@@ -45,7 +46,9 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
             if (!mounted) return;
             setState(() => _progress = progress);
           },
-          onPageFinished: (_) {
+          onPageFinished: (_) async {
+            if (!mounted) return;
+            await _injectSafeAreaStyle();
             if (!mounted) return;
             setState(() => _progress = 100);
           },
@@ -72,10 +75,11 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
 
     // Supply logical pixels before loading so H5 can reserve the safe area
     // on its first render instead of waiting for WebKit's env() update.
+    _safeAreaTop = MediaQuery.viewPaddingOf(context).top;
     _clientUrl = _clientBaseUrl.replace(
       queryParameters: {
         ..._clientBaseUrl.queryParameters,
-        'safeAreaTop': MediaQuery.viewPaddingOf(context).top.toString(),
+        'safeAreaTop': _safeAreaTop.toString(),
       },
     );
     _initializeWebView();
@@ -101,6 +105,21 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
     }
     if (!mounted) return;
     await _controller.loadRequest(_clientUrl);
+  }
+
+  Future<void> _injectSafeAreaStyle() async {
+    await _controller.runJavaScript('''
+      (() => {
+        const styleId = 'planet-native-safe-area';
+        let style = document.getElementById(styleId);
+        if (!style) {
+          style = document.createElement('style');
+          style.id = styleId;
+          document.head.appendChild(style);
+        }
+        style.textContent = ':root { --safe-top: ${_safeAreaTop}px; }';
+      })();
+    ''');
   }
 
   Future<void> _handleBack() async {
