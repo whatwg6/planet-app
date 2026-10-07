@@ -14,11 +14,13 @@ class ClientManagementPage extends StatefulWidget {
 class _ClientManagementPageState extends State<ClientManagementPage> {
   static const _backgroundColor = Color(0xFF141414);
   static const _textColor = Color(0xFFF5F5F5);
-  static final _clientUrl = Uri.parse(
+  static final _clientBaseUrl = Uri.parse(
     'https://planet-h5.vercel.app/ops/client-next',
   );
 
   late final WebViewController _controller;
+  late final Uri _clientUrl;
+  bool _initializationStarted = false;
   int _progress = 0;
   bool _hasError = false;
   bool _handlingBack = false;
@@ -59,6 +61,22 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
           },
         ),
       );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initializationStarted) return;
+    _initializationStarted = true;
+
+    // Supply logical pixels before loading so H5 can reserve the safe area
+    // on its first render instead of waiting for WebKit's env() update.
+    _clientUrl = _clientBaseUrl.replace(
+      queryParameters: {
+        ..._clientBaseUrl.queryParameters,
+        'safeAreaTop': MediaQuery.viewPaddingOf(context).top.toString(),
+      },
+    );
     _initializeWebView();
   }
 
