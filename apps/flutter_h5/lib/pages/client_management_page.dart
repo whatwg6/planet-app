@@ -24,6 +24,7 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
   int _progress = 0;
   bool _hasError = false;
   bool _handlingBack = false;
+  bool _canGoBack = false;
 
   @override
   void initState() {
@@ -82,12 +83,20 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
 
   Future<void> _initializeWebView() async {
     final platformController = _controller.platform;
-    if (kDebugMode && platformController is WebKitWebViewController) {
-      try {
-        await platformController.setInspectable(true);
-      } on PlatformException catch (error) {
-        // Older Apple OS versions enable inspection by default.
-        if (error.code != 'FWFUnsupportedVersionError') rethrow;
+    if (platformController is WebKitWebViewController) {
+      await platformController.setAllowsBackForwardNavigationGestures(true);
+      // Observe native history, including same-document SPA navigation.
+      await platformController.setOnCanGoBackChange((canGoBack) {
+        if (!mounted || _canGoBack == canGoBack) return;
+        setState(() => _canGoBack = canGoBack);
+      });
+      if (kDebugMode) {
+        try {
+          await platformController.setInspectable(true);
+        } on PlatformException catch (error) {
+          // Older Apple OS versions enable inspection by default.
+          if (error.code != 'FWFUnsupportedVersionError') rethrow;
+        }
       }
     }
     if (!mounted) return;
@@ -121,7 +130,8 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
   @override
   Widget build(BuildContext context) {
     return PopScope<void>(
-      canPop: Theme.of(context).platform == TargetPlatform.iOS,
+      // Let WebKit handle swipes while it has history; otherwise exit the route.
+      canPop: Theme.of(context).platform == TargetPlatform.iOS && !_canGoBack,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) _handleBack();
       },
