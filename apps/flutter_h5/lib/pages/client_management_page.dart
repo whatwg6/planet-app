@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 class ClientManagementPage extends StatefulWidget {
@@ -14,16 +15,18 @@ class ClientManagementPage extends StatefulWidget {
 class _ClientManagementPageState extends State<ClientManagementPage> {
   static const _backgroundColor = Color(0xFF141414);
   static const _textColor = Color(0xFFF5F5F5);
-  static final _clientBaseUrl = Uri.parse(
+  static const _safeAreaChannel = MethodChannel('planet/webview_safe_area');
+  static final _clientUrl = Uri.parse(
     'https://planet-h5.vercel.app/ops/client-next',
   );
 
   late final WebViewController _controller;
-  late final Uri _clientUrl;
   late final double _safeAreaTop;
   bool _initializationStarted = false;
+  bool _documentStartScriptInstalled = false;
   int _progress = 0;
   bool _hasError = false;
+  String _errorMessage = '页面加载失败，请检查网络后重试';
   bool _handlingBack = false;
   bool _canGoBack = false;
 
@@ -40,15 +43,14 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
             setState(() {
               _progress = 0;
               _hasError = false;
+              _errorMessage = '页面加载失败，请检查网络后重试';
             });
           },
           onProgress: (progress) {
             if (!mounted) return;
             setState(() => _progress = progress);
           },
-          onPageFinished: (_) async {
-            if (!mounted) return;
-            await _injectSafeAreaStyle();
+          onPageFinished: (_) {
             if (!mounted) return;
             setState(() => _progress = 100);
           },
@@ -73,19 +75,27 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
     if (_initializationStarted) return;
     _initializationStarted = true;
 
-    // Supply logical pixels before loading so H5 can reserve the safe area
-    // on its first render instead of waiting for WebKit's env() update.
+    // Capture logical pixels before registering the document-start script.
     _safeAreaTop = MediaQuery.viewPaddingOf(context).top;
-    _clientUrl = _clientBaseUrl.replace(
-      queryParameters: {
-        ..._clientBaseUrl.queryParameters,
-        'safeAreaTop': _safeAreaTop.toString(),
-      },
-    );
     _initializeWebView();
   }
 
   Future<void> _initializeWebView() async {
+    try {
+      await _configureWebView();
+    } on PlatformException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _hasError = true;
+        _errorMessage = error.code == 'DOCUMENT_START_UNSUPPORTED'
+            ? '请更新 Android System WebView 后重试'
+            : '页面初始化失败，请返回后重试';
+      });
+      debugPrint('WebView initialization failed: $error');
+    }
+  }
+
+  Future<void> _configureWebView() async {
     final platformController = _controller.platform;
     if (platformController is WebKitWebViewController) {
       await platformController.setAllowsBackForwardNavigationGestures(true);
@@ -104,22 +114,28 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
       }
     }
     if (!mounted) return;
+    if (!_documentStartScriptInstalled) {
+      // Register before loadRequest: page scripts must see the native value
+      // on their first execution, rather than after onPageFinished.
+      await _controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+      final int webViewIdentifier;
+      if (platformController is WebKitWebViewController) {
+        webViewIdentifier = platformController.webViewIdentifier;
+      } else if (platformController is AndroidWebViewController) {
+        webViewIdentifier = platformController.webViewIdentifier;
+      } else {
+        throw PlatformException(code: 'DOCUMENT_START_UNSUPPORTED');
+      }
+      final script = (await rootBundle.loadString('assets/js/safe_area.js'))
+          .replaceAll('__PLANET_SAFE_TOP__', _safeAreaTop.toString());
+      await _safeAreaChannel.invokeMethod<void>('installDocumentStartScript', {
+        'webViewIdentifier': webViewIdentifier,
+        'source': script,
+      });
+      _documentStartScriptInstalled = true;
+    }
+    if (!mounted) return;
     await _controller.loadRequest(_clientUrl);
-  }
-
-  Future<void> _injectSafeAreaStyle() async {
-    await _controller.runJavaScript('''
-      (() => {
-        const styleId = 'planet-native-safe-area';
-        let style = document.getElementById(styleId);
-        if (!style) {
-          style = document.createElement('style');
-          style.id = styleId;
-          document.head.appendChild(style);
-        }
-        style.textContent = ':root { --safe-top: ${_safeAreaTop}px; }';
-      })();
-    ''');
   }
 
   Future<void> _handleBack() async {
@@ -143,7 +159,11 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
       _hasError = false;
       _progress = 0;
     });
-    _controller.loadRequest(_clientUrl);
+    if (_documentStartScriptInstalled) {
+      _controller.loadRequest(_clientUrl);
+    } else {
+      _initializeWebView();
+    }
   }
 
   @override
@@ -177,9 +197,9 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
                       children: [
                         const Icon(Icons.wifi_off, size: 48, color: _textColor),
                         const SizedBox(height: 16),
-                        const Text(
-                          '页面加载失败，请检查网络后重试',
-                          style: TextStyle(color: _textColor),
+                        Text(
+                          _errorMessage,
+                          style: const TextStyle(color: _textColor),
                         ),
                         const SizedBox(height: 16),
                         FilledButton(
