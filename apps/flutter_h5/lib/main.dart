@@ -114,6 +114,37 @@ class HomePage extends StatelessWidget {
                 },
               ),
             ),
+            const SizedBox(height: 12),
+            Card(
+              margin: EdgeInsets.zero,
+              color: _backgroundColor,
+              surfaceTintColor: Colors.transparent,
+              clipBehavior: Clip.antiAlias,
+              child: ListTile(
+                contentPadding: const EdgeInsets.all(20),
+                leading: Icon(
+                  Icons.people_outline,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 32,
+                ),
+                title: const Text(
+                  '客户管理 csr',
+                  style: TextStyle(color: _textColor),
+                ),
+                subtitle: const Text(
+                  '查看与管理客户信息',
+                  style: TextStyle(color: _textColor),
+                ),
+                trailing: const Icon(Icons.chevron_right, color: _textColor),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const ClientManagementPage.csr(),
+                    ),
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),

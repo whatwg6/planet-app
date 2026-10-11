@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,8 +7,14 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
+import '../services/csr_asset_server.dart';
+
 class ClientManagementPage extends StatefulWidget {
-  const ClientManagementPage({super.key});
+  const ClientManagementPage({super.key}) : useCsr = false;
+
+  const ClientManagementPage.csr({super.key}) : useCsr = true;
+
+  final bool useCsr;
 
   @override
   State<ClientManagementPage> createState() => _ClientManagementPageState();
@@ -22,6 +30,7 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
 
   late final WebViewController _controller;
   late final double _safeAreaTop;
+  CsrAssetServer? _csrServer;
   bool _initializationStarted = false;
   bool _documentStartScriptInstalled = false;
   int _progress = 0;
@@ -92,6 +101,13 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
             : '页面初始化失败，请返回后重试';
       });
       debugPrint('WebView initialization failed: $error');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _hasError = true;
+        _errorMessage = '本地页面加载失败，请重试';
+      });
+      debugPrint('CSR initialization failed: $error');
     }
   }
 
@@ -135,7 +151,29 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
       _documentStartScriptInstalled = true;
     }
     if (!mounted) return;
-    await _controller.loadRequest(_clientUrl);
+    await _loadPage();
+  }
+
+  Future<void> _loadPage() async {
+    var url = _clientUrl;
+    if (widget.useCsr) {
+      final server = _csrServer ??= CsrAssetServer();
+      await server.close();
+      url = await server.start();
+      if (!mounted) {
+        await server.close();
+        return;
+      }
+    }
+    if (!mounted) return;
+    await _controller.loadRequest(url);
+  }
+
+  @override
+  void dispose() {
+    final server = _csrServer;
+    if (server != null) unawaited(server.close());
+    super.dispose();
   }
 
   Future<void> _handleBack() async {
@@ -159,11 +197,7 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
       _hasError = false;
       _progress = 0;
     });
-    if (_documentStartScriptInstalled) {
-      _controller.loadRequest(_clientUrl);
-    } else {
-      _initializeWebView();
-    }
+    _initializeWebView();
   }
 
   @override
