@@ -106,9 +106,11 @@ class HomePage extends StatelessWidget {
                 ),
                 trailing: const Icon(Icons.chevron_right, color: _textColor),
                 onTap: () {
+                  final loadStopwatch = Stopwatch()..start();
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
-                      builder: (_) => const ClientManagementPage(),
+                      builder: (_) =>
+                          ClientManagementPage(loadStopwatch: loadStopwatch),
                     ),
                   );
                 },
@@ -137,9 +139,12 @@ class HomePage extends StatelessWidget {
                 ),
                 trailing: const Icon(Icons.chevron_right, color: _textColor),
                 onTap: () {
+                  final loadStopwatch = Stopwatch()..start();
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
-                      builder: (_) => const ClientManagementPage.csr(),
+                      builder: (_) => ClientManagementPage.csr(
+                        loadStopwatch: loadStopwatch,
+                      ),
                     ),
                   );
                 },

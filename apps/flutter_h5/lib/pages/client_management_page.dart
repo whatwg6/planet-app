@@ -10,11 +10,14 @@ import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import '../services/csr_asset_server.dart';
 
 class ClientManagementPage extends StatefulWidget {
-  const ClientManagementPage({super.key}) : useCsr = false;
+  const ClientManagementPage({super.key, required this.loadStopwatch})
+    : useCsr = false;
 
-  const ClientManagementPage.csr({super.key}) : useCsr = true;
+  const ClientManagementPage.csr({super.key, required this.loadStopwatch})
+    : useCsr = true;
 
   final bool useCsr;
+  final Stopwatch loadStopwatch;
 
   @override
   State<ClientManagementPage> createState() => _ClientManagementPageState();
@@ -59,12 +62,24 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
             if (!mounted) return;
             setState(() => _progress = progress);
           },
-          onPageFinished: (_) {
+          onPageFinished: (url) {
             if (!mounted) return;
+            // Record the entry load once; ignore blank documents and failures.
+            if (!_hasError &&
+                Uri.tryParse(url)?.scheme != 'about' &&
+                widget.loadStopwatch.isRunning) {
+              widget.loadStopwatch.stop();
+              final entry = widget.useCsr ? '客户管理 csr' : '客户管理';
+              debugPrint(
+                '[HTML load] 入口=$entry '
+                '点击到 HTML 加载完成=${widget.loadStopwatch.elapsedMilliseconds} ms',
+              );
+            }
             setState(() => _progress = 100);
           },
           onWebResourceError: (error) {
             if (!mounted || error.isForMainFrame != true) return;
+            widget.loadStopwatch.stop();
             setState(() => _hasError = true);
           },
           onHttpError: (error) async {
@@ -72,6 +87,7 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
             if (!mounted || error.request?.uri.toString() != currentUrl) {
               return;
             }
+            widget.loadStopwatch.stop();
             setState(() => _hasError = true);
           },
         ),
@@ -94,6 +110,7 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
       await _configureWebView();
     } on PlatformException catch (error) {
       if (!mounted) return;
+      widget.loadStopwatch.stop();
       setState(() {
         _hasError = true;
         _errorMessage = error.code == 'DOCUMENT_START_UNSUPPORTED'
@@ -103,6 +120,7 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
       debugPrint('WebView initialization failed: $error');
     } catch (error) {
       if (!mounted) return;
+      widget.loadStopwatch.stop();
       setState(() {
         _hasError = true;
         _errorMessage = '本地页面加载失败，请重试';
@@ -171,6 +189,7 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
 
   @override
   void dispose() {
+    widget.loadStopwatch.stop();
     final server = _csrServer;
     if (server != null) unawaited(server.close());
     super.dispose();
