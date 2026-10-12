@@ -10,13 +10,21 @@ import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import '../services/csr_asset_server.dart';
 
 class ClientManagementPage extends StatefulWidget {
-  const ClientManagementPage({super.key, required this.loadStopwatch})
-    : useCsr = false;
+  const ClientManagementPage({
+    super.key,
+    required this.loadStopwatch,
+    this.url,
+    this.entryName = '客户管理',
+  }) : useCsr = false;
 
   const ClientManagementPage.csr({super.key, required this.loadStopwatch})
-    : useCsr = true;
+    : useCsr = true,
+      url = null,
+      entryName = '客户管理 dist/index.html';
 
   final bool useCsr;
+  final String? url;
+  final String entryName;
   final Stopwatch loadStopwatch;
 
   @override
@@ -69,9 +77,8 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
                 Uri.tryParse(url)?.scheme != 'about' &&
                 widget.loadStopwatch.isRunning) {
               widget.loadStopwatch.stop();
-              final entry = widget.useCsr ? '客户管理 csr' : '客户管理';
               debugPrint(
-                '[HTML load] 入口=$entry '
+                '[HTML load] 入口=${widget.entryName} '
                 '点击到 HTML 加载完成=${widget.loadStopwatch.elapsedMilliseconds} ms',
               );
             }
@@ -173,7 +180,7 @@ class _ClientManagementPageState extends State<ClientManagementPage> {
   }
 
   Future<void> _loadPage() async {
-    var url = _clientUrl;
+    var url = widget.url == null ? _clientUrl : Uri.parse(widget.url!);
     if (widget.useCsr) {
       final server = _csrServer ??= CsrAssetServer();
       await server.close();

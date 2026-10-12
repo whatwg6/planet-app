@@ -1,5 +1,8 @@
 # flutter_h5
 
+首页的“客户管理 next”通过 WebView 加载
+`https://planet-h5.yxc-next.cn/ops/client-next`，复用现有安全区、返回及错误重试逻辑。
+
 ## 客户管理 csr
 
 首页的“客户管理 csr”加载随 App 打包的 `assets/dist/client`，入口为
