@@ -48,11 +48,44 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
   static const _backgroundColor = Color(0xFF141414);
   static const _textColor = Color(0xFFF5F5F5);
+
+  WebViewController? _cacheController;
+  bool _clearingCache = false;
+
+  Future<void> _clearWebViewCache() async {
+    if (_clearingCache) return;
+    setState(() => _clearingCache = true);
+
+    var message = 'WebView 静态资源缓存已清理';
+    try {
+      // All entry points share the default WebView cache. Do not clear
+      // cookies or localStorage, which may contain login information.
+      final controller = _cacheController ??= WebViewController();
+      await controller.clearCache();
+    } catch (error) {
+      debugPrint('WebView cache clearing failed: $error');
+      message = '缓存清理失败，请重试';
+    } finally {
+      if (mounted) {
+        setState(() => _clearingCache = false);
+      }
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -185,6 +218,26 @@ class HomePage extends StatelessWidget {
                   );
                 },
               ),
+            ),
+            const SizedBox(height: 24),
+            OutlinedButton.icon(
+              onPressed: _clearingCache ? null : _clearWebViewCache,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _textColor,
+                disabledForegroundColor: _textColor.withValues(alpha: 0.6),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              icon: _clearingCache
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: _textColor,
+                      ),
+                    )
+                  : const Icon(Icons.cleaning_services_outlined),
+              label: Text(_clearingCache ? '正在清理缓存…' : '清理 WebView 缓存'),
             ),
           ],
         ),

@@ -3,6 +3,10 @@
 首页的“客户管理 next”通过 WebView 加载
 `https://planet-h5.yxc-next.cn/ops/client-next`，复用现有安全区、返回及错误重试逻辑。
 
+首页的“清理 WebView 缓存”按钮一键清理所有 WebView 入口共用的静态资源
+内存及磁盘缓存。清理期间按钮禁用，完成或失败后显示提示；下次打开页面时
+重新加载资源。保留 Cookie 和 localStorage，不删除随 App 打包的 CSR 产物。
+
 ## 客户管理 csr
 
 首页的“客户管理 csr”加载随 App 打包的 `assets/dist/client`，入口为
