@@ -58,6 +58,10 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   static const _backgroundColor = Color(0xFF141414);
   static const _textColor = Color(0xFFF5F5F5);
+  static const _entryCardShape = RoundedRectangleBorder(
+    borderRadius: BorderRadius.all(Radius.circular(12)),
+    side: BorderSide(color: Color(0xFF666666)),
+  );
 
   WebViewController? _cacheController;
   bool _clearingCache = false;
@@ -123,6 +127,7 @@ class _HomePageState extends State<HomePage> {
             Card(
               margin: EdgeInsets.zero,
               color: _backgroundColor,
+              shape: _entryCardShape,
               surfaceTintColor: Colors.transparent,
               clipBehavior: Clip.antiAlias,
               child: ListTile(
@@ -153,6 +158,7 @@ class _HomePageState extends State<HomePage> {
             Card(
               margin: EdgeInsets.zero,
               color: _backgroundColor,
+              shape: _entryCardShape,
               surfaceTintColor: Colors.transparent,
               clipBehavior: Clip.antiAlias,
               child: ListTile(
@@ -187,6 +193,7 @@ class _HomePageState extends State<HomePage> {
             Card(
               margin: EdgeInsets.zero,
               color: _backgroundColor,
+              shape: _entryCardShape,
               surfaceTintColor: Colors.transparent,
               clipBehavior: Clip.antiAlias,
               child: ListTile(
