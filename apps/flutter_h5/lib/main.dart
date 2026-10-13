@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,7 +7,9 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
+import 'client_urls.dart';
 import 'pages/client_management_page.dart';
+import 'widgets/client_next_preload.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,13 +69,78 @@ class _HomePageState extends State<HomePage> {
 
   WebViewController? _cacheController;
   bool _clearingCache = false;
+  final _preloadKey = GlobalKey<ClientNextPreloadState>();
+  Timer? _preloadDelay;
+  bool _showPreload = false;
+  bool _openingClientNext = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Only schedule once for this app launch, after the home screen settles.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _clearingCache || _openingClientNext) return;
+      if (kIsWeb || WebViewPlatform.instance == null) return;
+      if (defaultTargetPlatform != TargetPlatform.android &&
+          defaultTargetPlatform != TargetPlatform.iOS &&
+          defaultTargetPlatform != TargetPlatform.macOS) {
+        return;
+      }
+      _preloadDelay = Timer(const Duration(seconds: 1), () {
+        if (mounted) setState(() => _showPreload = true);
+      });
+    });
+  }
+
+  Future<void> _cancelClientNextPreload() async {
+    _preloadDelay?.cancel();
+    await _preloadKey.currentState?.cancel();
+    if (mounted && _showPreload) setState(() => _showPreload = false);
+  }
+
+  Future<void> _openClientNext() async {
+    if (_openingClientNext || _clearingCache) return;
+    setState(() => _openingClientNext = true);
+    final loadStopwatch = Stopwatch()..start();
+    try {
+      // An unresponsive background platform call must not block opening the page.
+      await _cancelClientNextPreload().timeout(
+        const Duration(seconds: 1),
+        onTimeout: () {
+          if (mounted) setState(() => _showPreload = false);
+        },
+      );
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ClientManagementPage(
+            loadStopwatch: loadStopwatch,
+            url: clientNextUrl,
+            entryName: '客户管理 next',
+          ),
+        ),
+      );
+    } finally {
+      loadStopwatch.stop();
+      if (mounted) setState(() => _openingClientNext = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _preloadDelay?.cancel();
+    unawaited(_preloadKey.currentState?.cancel());
+    super.dispose();
+  }
 
   Future<void> _clearWebViewCache() async {
-    if (_clearingCache) return;
+    if (_clearingCache || _openingClientNext) return;
     setState(() => _clearingCache = true);
 
     var message = 'WebView 静态资源缓存已清理';
     try {
+      // Stop preloading first so it cannot write resources back after clearing.
+      await _cancelClientNextPreload();
       // All entry points share the default WebView cache. Do not clear
       // cookies or localStorage, which may contain login information.
       final controller = _cacheController ??= WebViewController();
@@ -93,7 +162,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final home = Scaffold(
       backgroundColor: _backgroundColor,
       appBar: AppBar(
         title: const Text('首页'),
@@ -212,23 +281,16 @@ class _HomePageState extends State<HomePage> {
                   style: TextStyle(color: _textColor),
                 ),
                 trailing: const Icon(Icons.chevron_right, color: _textColor),
-                onTap: () {
-                  final loadStopwatch = Stopwatch()..start();
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => ClientManagementPage(
-                        loadStopwatch: loadStopwatch,
-                        url: 'https://planet-h5.yxc-next.cn/ops/client-next',
-                        entryName: '客户管理 next',
-                      ),
-                    ),
-                  );
-                },
+                onTap: _clearingCache || _openingClientNext
+                    ? null
+                    : _openClientNext,
               ),
             ),
             const SizedBox(height: 24),
             OutlinedButton.icon(
-              onPressed: _clearingCache ? null : _clearWebViewCache,
+              onPressed: _clearingCache || _openingClientNext
+                  ? null
+                  : _clearWebViewCache,
               style: OutlinedButton.styleFrom(
                 foregroundColor: _textColor,
                 disabledForegroundColor: _textColor.withValues(alpha: 0.6),
@@ -249,6 +311,20 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
+    );
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (_showPreload)
+          ClientNextPreload(
+            key: _preloadKey,
+            onFinished: () {
+              if (mounted) setState(() => _showPreload = false);
+            },
+          ),
+        // Keep this opaque home above the real platform view to prevent flashes.
+        home,
+      ],
     );
   }
 }
